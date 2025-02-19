@@ -14,7 +14,7 @@ def _process(url: str, so: dict[str, str]):
     vds = open_virtual_dataset(
             url, 
             drop_variables="crs",
-            loadable_variables=["streamflow"],
+            # loadable_variables=["streamflow"],
             indexes={}, 
             reader_options={"storage_options": so}
         )
