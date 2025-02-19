@@ -2,16 +2,15 @@ import warnings
 
 import fsspec
 import xarray as xr
-import dask
-import coiled
 from datetime import datetime, timedelta
 from virtualizarr import open_virtual_dataset
-import icechunk
-from dask.distributed import LocalCluster, Client
+from dask.distributed import LocalCluster
+
+from nwm_batcher.data_types import validate_configuration
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-def process(url: str, so: dict[str, str]):
+def _process(url: str, so: dict[str, str]):
     vds = open_virtual_dataset(
             url, 
             drop_variables="crs",
@@ -22,17 +21,24 @@ def process(url: str, so: dict[str, str]):
     return vds
 
 
-def main():
+def read(
+    date: str,
+    forecast_type: str,
+    initial_time: str = "t00z",
+    variable: str = "channel_rt",
+    client_settings: dict[str, int | str] = {
+        "n_workers":9,
+        "memory_limit":"2GiB",
+    },
+):
     fs = fsspec.filesystem("s3", anon=True)
-
-    date = "20250216"
-    forecast_type = "short_range"
     
-    cluster= LocalCluster()  
+    cluster= LocalCluster(**client_settings)  
     client = cluster.get_client()
+    
+    assert validate_configuration(forecast_type)
 
-    # Get the first day's pattern
-    file_pattern = f"s3://noaa-nwm-pds/nwm.{date}/{forecast_type}/nwm.t00z.{forecast_type}.*.*.nc"
+    file_pattern = f"s3://noaa-nwm-pds/nwm.{date}/{forecast_type}/nwm.{initial_time}.{forecast_type}.{variable}.*.nc"
     noaa_files = fs.glob(file_pattern)
     noaa_files = sorted(["s3://" + f for f in noaa_files])
     
@@ -40,7 +46,7 @@ def main():
 
     futures = []
     for url in noaa_files:  
-        future = client.submit(process, url, so)
+        future = client.submit(_process, url, so)
         futures.append(future)
 
     virtual_datasets = client.gather(futures)  
@@ -53,6 +59,3 @@ def main():
     )
     virtual_ds = virtual_ds.chunk({'time':1}, chunked_array_type="cubed")
     return virtual_ds
-
-if __name__ == "__main__":
-    main()
