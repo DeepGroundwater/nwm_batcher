@@ -38,4 +38,8 @@ dependencies = [
     "h5py==3.13.0",
     "cubed-xarray==0.0.7",
     "h5netcdf==1.5.0",
+    "ipykernel==6.29.5",
+    "matplotlib==3.10.3",
+    "kerchunk==0.2.8",
+    "boto3==1.38.18",
 ]

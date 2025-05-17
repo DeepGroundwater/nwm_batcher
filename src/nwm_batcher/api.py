@@ -10,11 +10,12 @@ from nwm_batcher.data_types import validate_configuration
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-def _process(url: str, so: dict[str, str]):
+def _process(url: str, so: dict[str, str], data_variable: str, coordinates: list[str]):
+    loadable_variables = coordinates.extend(data_variable)
     vds = open_virtual_dataset(
             url, 
             drop_variables="crs",
-            # loadable_variables=["streamflow"],
+            loadable_variables=loadable_variables,
             indexes={}, 
             reader_options={"storage_options": so}
         )
@@ -26,6 +27,8 @@ def read(
     forecast_type: str,
     initial_time: str = "t00z",
     variable: str = "channel_rt",
+    data_variable: str = "streamflow",
+    coordinates: list[str] = ["time", "reference_time", "feature_id"],
     client_settings: dict[str, int | str] = {
         "n_workers":9,
         "memory_limit":"2GiB",
@@ -46,16 +49,15 @@ def read(
 
     futures = []
     for url in noaa_files:  
-        future = client.submit(_process, url, so)
+        future = client.submit(_process, url, so, data_variable, coordinates)
         futures.append(future)
 
     virtual_datasets = client.gather(futures)  
 
-    virtual_ds = xr.combine_nested(
-        virtual_datasets, 
-        coords="minimal", 
-        compat='override', 
-        concat_dim=['time']
-    )
-    virtual_ds = virtual_ds.chunk({'time':1}, chunked_array_type="cubed")
-    return virtual_ds
+    # virtual_ds = xr.combine_by_coords(
+    #     virtual_datasets, 
+    #     coords="minimal", 
+    #     compat='override', 
+    #     combine_attrs="drop"
+    # )
+    return virtual_datasets
